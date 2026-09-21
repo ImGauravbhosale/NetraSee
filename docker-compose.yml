@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: netrasee
+      POSTGRES_PASSWORD: netrasee
+      POSTGRES_DB: netrasee
+    ports:
+      - "5432:5432"
+    volumes:
+      - netrasee_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U netrasee"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      NETRASEE_DATABASE_URL: postgresql+asyncpg://netrasee:netrasee@postgres:5432/netrasee
+      NETRASEE_EVIDENCE_STORAGE_DIR: /data/evidence
+    volumes:
+      - netrasee_evidence_data:/data/evidence
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  frontend:
+    build: ./frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  netrasee_postgres_data:
+  netrasee_evidence_data:
