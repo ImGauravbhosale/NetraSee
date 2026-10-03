@@ -1,11 +1,30 @@
 # NetraSee
 
-**Open-source, evidence-backed compliance for teams who don't want a checklist app.**
+[![Tests](https://github.com/ImGauravbhosale/NetraSee/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/ImGauravbhosale/NetraSee/actions/workflows/test.yml)
+[![License](https://img.shields.io/github/license/ImGauravbhosale/NetraSee)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue)](backend/pyproject.toml)
+[![Next.js](https://img.shields.io/badge/next.js-16-black)](frontend/package.json)
 
-Most compliance tools show you a checklist someone filled in once. NetraSee computes
-your compliance posture live, from your actual controls and evidence — if evidence
-expires or a control fails, the dashboard reflects that the moment it happens, not
-whenever someone remembers to update a spreadsheet.
+Open-source, evidence-backed compliance for teams who don't want a checklist app.
+Most compliance tools show you a checklist someone filled in once — NetraSee
+computes your posture live from real controls and evidence, and can check a
+control itself against a live GitHub or AWS account instead of waiting on a
+human to upload a screenshot.
+
+## Try it in 30 seconds — no database, no server
+
+```bash
+git clone https://github.com/ImGauravbhosale/NetraSee.git
+cd NetraSee/backend && uv sync
+uv run netrasee-check --list-checks
+uv run netrasee-check --provider github --check github.branch_protection \
+  --target torvalds/linux --token "$GITHUB_TOKEN" --json
+```
+
+That's the same check engine that runs behind the full web dashboard below —
+real API call, real PASS/FAIL/NEEDS_REVIEW, exit code built for a CI gate. See
+[CLI and CI gate](#not-just-a-web-app--a-cli-and-a-ci-gate) for the GitHub
+Action version.
 
 ![Dashboard](docs/screenshots/dashboard.jpg)
 
@@ -50,21 +69,12 @@ by the next sync, so a real failure can't be quietly clicked away to PASS.
 
 ## Not just a web app — a CLI and a CI gate
 
-The same check engine that runs behind the web dashboard runs standalone, with no
-database and no server:
+[Already tried the CLI above](#try-it-in-30-seconds--no-database-no-server)? It
+exits `0` on PASS, `1` on FAIL, and optionally on NEEDS_REVIEW with
+`--fail-on-review` — built to gate a pipeline, not just print a report.
 
-```bash
-cd backend
-uv run netrasee-check --list-checks
-uv run netrasee-check --provider github --check github.branch_protection \
-  --target your-org/your-repo --token "$GITHUB_TOKEN" --json
-```
-
-Exits `0` on PASS, `1` on FAIL (and optionally on NEEDS_REVIEW with
-`--fail-on-review`) — built to gate a pipeline, not just print a report.
-
-That CLI is also packaged as a GitHub Action ([`action.yml`](action.yml)) you can
-drop into any repo's workflow:
+It's also packaged as a GitHub Action ([`action.yml`](action.yml)) you can drop
+into any repo's workflow:
 
 ```yaml
 - uses: ImGauravbhosale/NetraSee@main
@@ -118,6 +128,9 @@ tests), and every number on every screenshot in this README came from actually
 running the app.
 
 ## Quick start
+
+The CLI above runs one check with nothing installed but `uv`. To run the full
+platform — dashboard, frameworks, evidence, audit log — pick one of these:
 
 ### Docker Compose
 
@@ -261,4 +274,4 @@ GitHub and AWS responses, and the CLI's exit codes. Runs on every push via
 
 ## License
 
-MIT
+[MIT](LICENSE)
