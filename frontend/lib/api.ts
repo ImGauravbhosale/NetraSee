@@ -147,6 +147,13 @@ export interface EvidenceOut {
   controls: { control_id: string; control_key: string; control_name: string }[];
 }
 
+export interface FrameworkOut {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+}
+
 export interface AdoptedFramework {
   framework: { id: string; key: string; name: string; description: string };
   adopted_at: string;
@@ -170,7 +177,7 @@ export interface MemberOut {
 
 export interface ConnectionOut {
   id: string;
-  provider: "GITHUB";
+  provider: "GITHUB" | "AWS";
   account_login: string;
   last_synced_at: string | null;
   created_at: string;

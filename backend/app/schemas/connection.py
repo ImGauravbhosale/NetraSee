@@ -10,7 +10,8 @@ from app.models.connection import ConnectionProvider
 
 class ConnectionCreateRequest(BaseModel):
     provider: ConnectionProvider = ConnectionProvider.GITHUB
-    token: str = Field(min_length=1, max_length=2000)
+    # GitHub: {"token": "ghp_..."} — AWS: {"access_key_id": "...", "secret_access_key": "...", "region": "..."}
+    credentials: dict[str, str] = Field(min_length=1)
 
 
 class ConnectionOut(BaseModel):

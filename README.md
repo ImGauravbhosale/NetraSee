@@ -26,15 +26,46 @@ one flow this v1 was built to get right end to end.
 
 ## Automated controls — not just a dashboard
 
-A control doesn't have to be manually reviewed. Connect a real GitHub account and
-bind a control to a live check — NetraSee calls the GitHub API itself, computes
-PASS/FAIL/NEEDS_REVIEW, and attaches the exact API response as evidence. No human
-types in a status; no automated PASS exists without a citable response behind it.
+A control doesn't have to be manually reviewed. Connect a real GitHub or AWS
+account and bind a control to a live check — NetraSee calls the provider's API
+itself, computes PASS/FAIL/NEEDS_REVIEW, and attaches the exact API response as
+evidence. No human types in a status; no automated PASS exists without a citable
+response behind it.
 
-Checks shipped in v1: branch protection requires PR review, org-wide 2FA
-enforcement, Dependabot alerts enabled, secret scanning enabled. Once a control is
-bound, its status can no longer be set manually — it's overwritten by the next sync,
-so a real failure can't be quietly clicked away to PASS.
+Checks shipped in v1:
+
+| Provider | Check | Target |
+|---|---|---|
+| GitHub | Branch protection requires PR reviews | `owner/repo` |
+| GitHub | Org-wide 2FA enforcement | org login |
+| GitHub | Dependabot alerts enabled | `owner/repo` |
+| GitHub | Secret scanning enabled | `owner/repo` |
+| AWS | Root account MFA enabled | account-wide |
+| AWS | All IAM users have MFA | account-wide |
+| AWS | CloudTrail logging enabled | region |
+| AWS | S3 bucket blocks public access | bucket name |
+
+Once a control is bound, its status can no longer be set manually — it's overwritten
+by the next sync, so a real failure can't be quietly clicked away to PASS.
+
+## Framework catalog
+
+Six frameworks, seeded from each one's own published structure (sources in
+[`app/services/framework_catalog.py`](backend/app/services/framework_catalog.py) —
+nothing here is invented):
+
+| Framework | Requirements |
+|---|---|
+| SOC 2 | 9 — AICPA Trust Services Criteria (CC1–CC9) |
+| ISO 27001 | 4 — Annex A themes (2022 revision) |
+| GDPR | 9 — key accountability/security articles |
+| PCI DSS v4.0 | 12 — the full official requirement list |
+| HIPAA Security Rule | 13 — administrative/physical/technical safeguard standards |
+| NIST CSF 2.0 | 6 — the six core functions |
+
+Any org can adopt any subset from Frameworks → Adopt a framework. One control can
+satisfy requirements across multiple frameworks at once (the seeded demo MFA
+control maps to both SOC 2 and ISO 27001).
 
 ## What's actually built (v1)
 
@@ -42,17 +73,17 @@ so a real failure can't be quietly clicked away to PASS.
 |---|---|
 | Auth (session cookies, argon2id, CSRF) | ✅ |
 | Multi-tenant orgs, 3 roles (Owner/Admin/Viewer) | ✅ |
-| Frameworks + requirements, progress computed live | ✅ (SOC 2, ISO 27001 seeded) |
+| Frameworks + requirements, progress computed live | ✅ (6 frameworks in the global catalog) |
 | Controls (many-to-many to requirements, real reuse) | ✅ |
 | Evidence (upload, expiry-aware status, control links) | ✅ |
-| Automated checks against a live GitHub account | ✅ |
+| Automated checks against live GitHub and AWS accounts | ✅ |
 | Append-only audit log | ✅ |
 | Policies / Risks / Assets / Vendors / Audit Center / Reports | 🚧 Not built — see [Roadmap](#roadmap) |
 
-Nothing above is a mockup. It's backed by a real Postgres database, 52 passing
+Nothing above is a mockup. It's backed by a real Postgres database, 66 passing
 tests (including 7 dedicated cross-tenant-isolation tests and connector tests
-against realistically-shaped mocked GitHub responses), and every number on every
-screenshot in this README came from actually running the app.
+against realistically-shaped mocked GitHub and AWS responses), and every number
+on every screenshot in this README came from actually running the app.
 
 ## Quick start
 
@@ -100,6 +131,11 @@ npm run dev
 
 Open **http://localhost:3000/login**.
 
+`seed_demo.py` seeds the full global framework catalog (all 6 frameworks) plus a
+demo org, user, and sample controls. For a real deployment where you don't want
+the demo org, run `uv run python scripts/seed_frameworks.py` instead — it seeds
+only the framework catalog, nothing org-specific.
+
 ### Demo login
 
 ```
@@ -131,7 +167,7 @@ NetraSee/
 │       ├── models/     SQLAlchemy ORM
 │       ├── schemas/    Pydantic request/response
 │       └── services/   audit log, evidence status, login rate limiting,
-│                        automated checks, GitHub connector
+│                        framework catalog, automated checks, GitHub/AWS connectors
 └── frontend/           Next.js 16 (App Router) + TypeScript + Tailwind
     ├── app/            one route per page
     ├── components/     NavShell, StatusBadge, ProgressBar
@@ -158,10 +194,10 @@ Pydantic v2 on the backend; Next.js 16, TypeScript, Tailwind v4 on the frontend.
   traversal.
 - **Audit log**: every mutating action writes an append-only `audit_events` row —
   actor, before/after state, timestamp.
-- **Connection credentials**: a connected GitHub token is validated against the
-  real API before it's ever stored, encrypted at rest with Fernet (AES-128-CBC +
-  HMAC), and never returned by any API response after creation — not even to the
-  org that owns it.
+- **Connection credentials**: a connected GitHub token or AWS access key pair is
+  validated against the real provider API before it's ever stored, encrypted at
+  rest with Fernet (AES-128-CBC + HMAC) as a single JSON blob, and never returned
+  by any API response after creation — not even to the org that owns it.
 
 Deferred and documented, not silently skipped: SSO/OAuth, MFA.
 
@@ -169,12 +205,12 @@ Deferred and documented, not silently skipped: SSO/OAuth, MFA.
 
 Explicitly out of scope for v1, listed here rather than silently dropped:
 
-- More connectors (AWS / Google Workspace / Jira) — GitHub is live, see above
+- More connectors (Google Workspace / Jira) — GitHub and AWS are live, see above
 - Compliance-as-code (YAML-defined controls)
 - Policies, Risk register, Asset inventory, Vendor management
 - Audit Center (auditor-facing workspace)
 - Notifications, report exports
-- Additional frameworks beyond SOC 2 / ISO 27001
+- Additional frameworks beyond the 6 in the current catalog
 - 4 more RBAC roles beyond Owner/Admin/Viewer
 
 ## Running the tests
@@ -184,10 +220,11 @@ cd backend
 uv run pytest
 ```
 
-52 tests, run against a real Postgres database (not mocked) — auth, tenant
+66 tests, run against a real Postgres database (not mocked) — auth, tenant
 isolation, role/permission checks, CSRF, evidence status computation, SQL
-injection safety on filter parameters, and the GitHub connector's PASS/FAIL/
-NEEDS_REVIEW logic against realistically-shaped mocked API responses.
+injection safety on filter parameters, the full framework catalog, and both
+connectors' PASS/FAIL/NEEDS_REVIEW logic against realistically-shaped mocked
+GitHub and AWS responses.
 
 ## License
 

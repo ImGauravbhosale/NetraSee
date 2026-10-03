@@ -42,6 +42,14 @@ frameworks at once — that's deliberate. In the seed data, one "MFA enforced"
 control is mapped to both SOC 2's CC6 and ISO 27001's A.8, so fixing it moves both
 frameworks forward together instead of duplicating the work.
 
+NetraSee's global catalog ships with six frameworks: SOC 2, ISO 27001, GDPR,
+PCI DSS v4.0, HIPAA Security Rule, and NIST CSF 2.0 — each seeded from that
+framework's own published structure (see the table in the
+[README](../README.md#framework-catalog)). Any not yet adopted show up under
+**Adopt a framework** at the bottom of the page (Owner/Admin only) — adopting one
+just makes its requirements available to map controls against; it doesn't create
+any controls for you.
+
 ## 4. Controls
 
 **Controls** lists every control in your org, with a status filter dropdown. Each
@@ -93,41 +101,48 @@ audit event so there's a record of who deleted what and when.
 ## 6. Integrations — automated controls
 
 **Integrations** is where you connect a real account so NetraSee can evaluate
-controls itself instead of waiting on a human to upload evidence.
+controls itself instead of waiting on a human to upload evidence. Two providers
+are supported:
 
 1. Click **Connect GitHub** and paste a personal access token with `repo` and
-   `read:org` scopes. NetraSee validates it against the real GitHub API before
-   saving anything — a dead or mistyped token is rejected immediately, not
-   discovered on the first sync. The token is encrypted at rest and never shown
-   again, including to you.
+   `read:org` scopes, **or** click **Connect AWS** and enter an access key ID +
+   secret access key (read-only IAM credentials recommended) and a region.
+   NetraSee validates the credentials against the real API before saving
+   anything — dead or mistyped credentials are rejected immediately, not
+   discovered on the first sync. Credentials are encrypted at rest and never
+   shown again, including to you.
 2. Open a control's detail page and use the **Automation** panel to bind it to
-   one of the available checks (branch protection, org-wide 2FA, Dependabot
-   alerts, secret scanning) and a target (`owner/repo` for repo-level checks, or
-   just the org login for org-wide ones like 2FA).
-3. Back on **Integrations**, click **Sync now**. NetraSee calls GitHub live,
-   computes PASS/FAIL/NEEDS_REVIEW for every bound control, and shows you the
-   exact result for each.
+   one of the available checks and a target:
+   - GitHub: branch protection, org-wide 2FA, Dependabot alerts, secret
+     scanning — target is `owner/repo`, or just the org login for 2FA.
+   - AWS: root account MFA, all IAM users have MFA, CloudTrail logging, S3
+     bucket public-access block — target is a bucket name or region for the
+     resource-scoped checks (the account-wide checks ignore it; put anything,
+     e.g. `account`).
+3. Back on **Integrations**, click **Sync now** on that connection. NetraSee
+   calls the provider live, computes PASS/FAIL/NEEDS_REVIEW for every control
+   bound to it, and shows you the exact result for each.
 
 Once a control is bound to automation:
 
 - Its status can no longer be changed with the manual status dropdown — the
   PATCH is rejected server-side, not just hidden in the UI, so a real failure
   can't be quietly clicked away to PASS.
-- Every sync creates a real Evidence entry containing GitHub's exact API
+- Every sync creates a real Evidence entry containing the provider's exact API
   response, visible from the control's detail page alongside its summary (e.g.
-  *"Branch 'main' on acme/widgets has no protection rules configured"*) —
-  not just a status, but what produced it.
+  *"Branch 'main' on acme/widgets has no protection rules configured"* or
+  *"MFA is NOT enabled on the AWS root account"*) — not just a status, but what
+  produced it.
 - This automated evidence expires after 24 hours, so a control can't keep
   reading as compliant indefinitely off a single stale sync.
 
 Unbind a control from its **Automation** panel at any time to make it manual
-again. Disconnecting a GitHub connection entirely automatically unbinds every
-control that depended on it, rather than leaving them pointed at a dead
-credential.
+again. Disconnecting a connection entirely automatically unbinds every control
+that depended on it, rather than leaving them pointed at a dead credential.
 
 A check that can't attribute its result to the control itself — a missing
-permission, a repo the token can't see, a network error — comes back as
-**NEEDS_REVIEW**, never a false FAIL or false PASS.
+permission, a resource the credentials can't see, a network error — comes back
+as **NEEDS_REVIEW**, never a false FAIL or false PASS.
 
 ## 7. Roles
 
@@ -175,10 +190,17 @@ and the file is under 25MB.
 rejects it (expired, revoked, or wrong scopes). Confirm it has `repo` and
 `read:org` scopes and hasn't expired.
 
+**My AWS connection won't save** — the access key pair is rejected if AWS
+itself rejects it. Confirm the key is active (not deleted/deactivated in IAM)
+and that you copied both the access key ID and secret access key correctly —
+AWS only shows the secret once, at creation.
+
 **A bound control keeps coming back NEEDS_REVIEW** — this means the check ran
-but couldn't attribute a real pass/fail to your token's access: usually the
-token can't see the repo/org, or lacks admin rights needed for that specific
-check (e.g. branch protection and secret scanning both need repo admin access).
+but couldn't attribute a real pass/fail to your credentials' access: usually
+they can't see the resource, or lack the permission that specific check needs
+(e.g. GitHub's branch protection and secret scanning both need repo admin
+access; AWS's checks need the relevant `iam:`, `cloudtrail:`, or `s3:` read
+permissions).
 
 **I can't see the Activity Log** — it's restricted to Admin and Owner roles;
 Viewers don't have access.

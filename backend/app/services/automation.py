@@ -21,7 +21,7 @@ from app.models.connection import Connection
 from app.models.control import Control, ControlStatus
 from app.models.evidence import Evidence, EvidenceControlLink
 from app.services.audit import write_audit_event
-from app.services.connectors import github
+from app.services.connectors import CONNECTORS, base
 
 # Automated evidence expires quickly on purpose: a sync from yesterday
 # shouldn't silently keep passing a control forever. Re-sync is cheap, so
@@ -36,16 +36,17 @@ async def run_control_check(
     connection: Connection,
     actor_user_id: uuid.UUID,
     request: Request | None = None,
-) -> github.CheckResult:
-    check_fn = github.CHECKS.get(control.automation_check_key or "")
+) -> base.CheckResult:
+    connector = CONNECTORS[connection.provider.value]
+    check_fn = connector.CHECKS.get(control.automation_check_key or "")
     if check_fn is None:
         raise ValueError(f"Unknown automation check: {control.automation_check_key}")
 
-    token = decrypt_secret(connection.encrypted_token)
+    credentials = json.loads(decrypt_secret(connection.encrypted_token))
     try:
-        result = await check_fn(token, control.automation_target or "")
+        result = await check_fn(credentials, control.automation_target or "")
     except Exception as exc:  # noqa: BLE001 — network/HTTP errors must never crash a sync
-        result = github.CheckResult(
+        result = base.CheckResult(
             status=ControlStatus.NEEDS_REVIEW,
             summary=f"Automated check failed to run: {exc}",
             raw={"error": str(exc)},
@@ -63,18 +64,18 @@ async def run_control_check(
     stored_name = f"{evidence_id}.json"
     (org_dir / stored_name).write_bytes(raw_bytes)
 
-    check_label = github.CHECK_LABELS.get(control.automation_check_key, control.automation_check_key)
+    check_label = connector.CHECK_LABELS.get(control.automation_check_key, control.automation_check_key)
     evidence = Evidence(
         id=evidence_id,
         organization_id=control.organization_id,
         name=f"{check_label} — {control.automation_target}",
         description=result.summary,
-        source="github",
+        source=connection.provider.value.lower(),
         collected_at=datetime.now(timezone.utc),
         expires_at=datetime.now(timezone.utc) + _EVIDENCE_TTL,
         owner_user_id=actor_user_id,
         checksum_sha256=checksum,
-        collection_method="automated_github_api",
+        collection_method=f"automated_{connection.provider.value.lower()}_api",
         file_path=str(org_dir / stored_name),
     )
     db.add(evidence)

@@ -28,13 +28,13 @@ async def _create_control(client, org_id, **overrides):
 
 
 async def _create_connection(client, org_id, monkeypatch, login="octocat"):
-    async def fake_validate_token(token: str) -> str:
+    async def fake_validate(credentials: dict) -> str:
         return login
 
-    monkeypatch.setattr(github, "validate_token", fake_validate_token)
+    monkeypatch.setattr(github, "validate", fake_validate)
     resp = await client.post(
         f"/api/v1/orgs/{org_id}/connections",
-        json={"provider": "GITHUB", "token": "ghp_faketoken"},
+        json={"provider": "GITHUB", "credentials": {"token": "ghp_faketoken"}},
         headers=csrf_headers(client),
     )
     assert resp.status_code == 201, resp.text
@@ -47,7 +47,7 @@ async def test_create_connection_never_returns_raw_token(client, monkeypatch):
 
     connection = await _create_connection(client, org_id, monkeypatch)
     assert connection["account_login"] == "octocat"
-    assert "token" not in connection
+    assert "credentials" not in connection
     assert "encrypted_token" not in connection
 
 
@@ -55,13 +55,13 @@ async def test_create_connection_rejects_invalid_token(client, monkeypatch):
     reg = await register(client, email="conn2@example.com")
     org_id = reg["organization_id"]
 
-    async def fake_validate_token(token: str) -> str:
+    async def fake_validate(credentials: dict) -> str:
         raise github.GithubAuthError("GitHub rejected this token")
 
-    monkeypatch.setattr(github, "validate_token", fake_validate_token)
+    monkeypatch.setattr(github, "validate", fake_validate)
     resp = await client.post(
         f"/api/v1/orgs/{org_id}/connections",
-        json={"provider": "GITHUB", "token": "bad"},
+        json={"provider": "GITHUB", "credentials": {"token": "bad"}},
         headers=csrf_headers(client),
     )
     assert resp.status_code == 400
@@ -81,7 +81,7 @@ async def test_bind_automation_and_sync_updates_control_status(client, monkeypat
     assert bind_resp.status_code == 200, bind_resp.text
     assert bind_resp.json()["automation_status"] == "AUTOMATED"
 
-    async def fake_check(token: str, target: str) -> github.CheckResult:
+    async def fake_check(credentials: dict, target: str) -> github.CheckResult:
         return github.CheckResult(ControlStatus.PASS, f"{target} looks good", {"ok": True})
 
     monkeypatch.setitem(github.CHECKS, "github.branch_protection", fake_check)

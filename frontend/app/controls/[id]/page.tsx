@@ -39,6 +39,7 @@ function AutomationPanel({
   }, [orgId]);
 
   if (control.automation_connection_id) {
+    const providerLabel = control.automation_check_key?.startsWith("aws.") ? "AWS" : "GitHub";
     const handleUnbind = async () => {
       setSubmitting(true);
       setError(null);
@@ -53,7 +54,7 @@ function AutomationPanel({
     };
     return (
       <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-sm">
-        <div className="font-semibold text-indigo-900">Automated by GitHub</div>
+        <div className="font-semibold text-indigo-900">Automated by {providerLabel}</div>
         <p className="mt-1 text-indigo-800">
           Status is set by <span className="font-mono">{control.automation_check_key}</span> against{" "}
           <span className="font-mono">{control.automation_target}</span>. Re-sync from{" "}
@@ -75,7 +76,7 @@ function AutomationPanel({
     return (
       <p className="text-sm text-neutral-500">
         No connections available —{" "}
-        <Link href="/integrations" className="text-indigo-600 hover:text-indigo-500">connect GitHub</Link> first.
+        <Link href="/integrations" className="text-indigo-600 hover:text-indigo-500">connect GitHub or AWS</Link> first.
       </p>
     );
   }
@@ -106,7 +107,7 @@ function AutomationPanel({
           <label className="mb-1 block text-xs font-medium text-neutral-700">Connection</label>
           <select value={connectionId} onChange={(e) => setConnectionId(e.target.value)} className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm">
             {connections.map((c) => (
-              <option key={c.id} value={c.id}>{c.account_login}</option>
+              <option key={c.id} value={c.id}>{c.provider === "GITHUB" ? "GitHub" : "AWS"} — {c.account_login}</option>
             ))}
           </select>
         </div>

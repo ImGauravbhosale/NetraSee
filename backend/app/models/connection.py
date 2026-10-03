@@ -13,6 +13,7 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 class ConnectionProvider(str, enum.Enum):
     GITHUB = "GITHUB"
+    AWS = "AWS"
 
 
 class Connection(Base, UUIDPrimaryKeyMixin, TimestampMixin):

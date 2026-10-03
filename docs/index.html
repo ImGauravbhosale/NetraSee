@@ -220,8 +220,8 @@
     <h2>Automated controls — not just a dashboard</h2>
     <h3>A control doesn't have to wait on a human</h3>
     <p>
-      Connect a real GitHub account and bind a control to a live check.
-      NetraSee calls the GitHub API itself, computes PASS / FAIL / NEEDS_REVIEW,
+      Connect a real GitHub or AWS account and bind a control to a live check.
+      NetraSee calls the provider's API itself, computes PASS / FAIL / NEEDS_REVIEW,
       and attaches the exact API response as evidence — no finding without a
       citable response behind it. Once bound, a control's status can't be
       manually overridden; the next sync overwrites it, so a real failure can't
@@ -229,6 +229,9 @@
     </p>
     <div class="flow">
       Connect GitHub → bind CTRL-002 to <strong>branch_protection</strong> on <strong>acme/widgets</strong> → sync → GitHub API: no protection rule found → status: <strong>FAIL</strong>, evidence: the raw response
+    </div>
+    <div class="flow" style="margin-top:12px">
+      Connect AWS → bind CTRL-005 to <strong>root_mfa_enabled</strong> → sync → IAM API: AccountMFAEnabled=0 → status: <strong>FAIL</strong>, evidence: the raw response
     </div>
   </div>
 </section>
@@ -241,10 +244,10 @@
       <tbody>
         <tr><td>Auth — session cookies, argon2id, CSRF</td><td class="ok">Built</td></tr>
         <tr><td>Multi-tenant orgs, 3 roles (Owner / Admin / Viewer)</td><td class="ok">Built</td></tr>
-        <tr><td>Frameworks + requirements, live progress</td><td class="ok">Built — SOC 2, ISO 27001</td></tr>
+        <tr><td>Frameworks + requirements, live progress</td><td class="ok">Built — 6 frameworks</td></tr>
         <tr><td>Controls, reusable across frameworks</td><td class="ok">Built</td></tr>
         <tr><td>Evidence — upload, expiry-aware status</td><td class="ok">Built</td></tr>
-        <tr><td>Automated checks against a live GitHub account</td><td class="ok">Built</td></tr>
+        <tr><td>Automated checks against live GitHub &amp; AWS accounts</td><td class="ok">Built</td></tr>
         <tr><td>Append-only audit log</td><td class="ok">Built</td></tr>
         <tr><td>Policies / Risks / Assets / Vendors / Audit Center / Reports</td><td class="soon">Roadmap</td></tr>
       </tbody>
@@ -291,7 +294,7 @@ docker compose exec backend uv run python scripts/seed_demo.py</pre>
       </div>
       <div>
         <h3>Connection credentials encrypted at rest</h3>
-        <p>A connected GitHub token is validated against the real API before it's ever stored, encrypted with Fernet (AES-128-CBC + HMAC), and never returned by any API response — not even to the org that owns it.</p>
+        <p>A connected GitHub token or AWS access key pair is validated against the real API before it's ever stored, encrypted with Fernet (AES-128-CBC + HMAC), and never returned by any API response — not even to the org that owns it.</p>
       </div>
       <div>
         <h3>Automated status can't be faked</h3>
@@ -305,13 +308,13 @@ docker compose exec backend uv run python scripts/seed_demo.py</pre>
   <div class="wrap">
     <h2>Roadmap — deferred, not dropped</h2>
     <ul class="roadmap">
-      <li>More connectors (AWS / Google Workspace / Jira) — GitHub is live</li>
+      <li>More connectors (Google Workspace / Jira) — GitHub and AWS are live</li>
       <li>Compliance-as-code (YAML-defined controls)</li>
       <li>Policies, Risk register, Asset inventory</li>
       <li>Vendor management</li>
       <li>Audit Center (auditor workspace)</li>
       <li>Notifications, report exports</li>
-      <li>Additional frameworks beyond SOC 2 / ISO 27001</li>
+      <li>Additional frameworks beyond the 6 in the current catalog</li>
       <li>4 more RBAC roles beyond Owner / Admin / Viewer</li>
     </ul>
   </div>

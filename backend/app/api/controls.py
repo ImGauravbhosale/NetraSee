@@ -24,7 +24,7 @@ from app.schemas.control import (
     RequirementMappingOut,
 )
 from app.services.audit import write_audit_event
-from app.services.connectors import github
+from app.services.connectors import CONNECTORS
 from app.services.evidence_status import effective_status
 
 router = APIRouter(prefix="/api/v1/orgs/{org_id}/controls", tags=["controls"])
@@ -211,8 +211,9 @@ async def bind_automation(
     if connection is None or connection.organization_id != org_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Connection not found")
 
-    if payload.check_key not in github.CHECKS:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unknown check: {payload.check_key}")
+    connector = CONNECTORS[connection.provider.value]
+    if payload.check_key not in connector.CHECKS:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unknown check for {connection.provider.value}: {payload.check_key}")
 
     control.automation_connection_id = connection.id
     control.automation_check_key = payload.check_key

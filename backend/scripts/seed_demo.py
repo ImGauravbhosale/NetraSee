@@ -22,34 +22,20 @@ from app.core.db import async_session_factory
 from app.core.security import hash_password
 from app.models.control import AutomationStatus, Control, ControlRequirementLink, ControlStatus
 from app.models.evidence import Evidence, EvidenceControlLink
-from app.models.framework import Framework, OrganizationFramework, Requirement
+from app.models.framework import OrganizationFramework, Requirement
 from app.models.membership import Membership, Role
 from app.models.organization import Organization
 from app.models.user import User
+from app.services.framework_catalog import ensure_catalog_seeded
 
 DEMO_EMAIL = "demo@example.com"
 DEMO_PASSWORD = "netrasee-demo-1234"
 
 
-async def _get_or_create_framework(db, key: str, name: str, description: str) -> Framework:
-    result = await db.execute(select(Framework).where(Framework.key == key))
-    framework = result.scalar_one_or_none()
-    if framework is None:
-        framework = Framework(key=key, name=name, description=description)
-        db.add(framework)
-        await db.flush()
-    return framework
-
-
-async def _get_or_create_requirement(db, framework: Framework, key: str, name: str) -> Requirement:
-    result = await db.execute(
-        select(Requirement).where(Requirement.framework_id == framework.id, Requirement.key == key)
-    )
+async def _requirement(db, framework_id, key: str) -> Requirement:
+    result = await db.execute(select(Requirement).where(Requirement.framework_id == framework_id, Requirement.key == key))
     req = result.scalar_one_or_none()
-    if req is None:
-        req = Requirement(framework_id=framework.id, key=key, name=name, description=f"{key} — {name}")
-        db.add(req)
-        await db.flush()
+    assert req is not None, f"Requirement {key} missing — ensure_catalog_seeded should have created it"
     return req
 
 
@@ -70,16 +56,21 @@ async def seed() -> None:
         await db.flush()
         db.add(Membership(user_id=owner.id, organization_id=org.id, role=Role.OWNER))
 
-        soc2 = await _get_or_create_framework(db, "soc2", "SOC 2", "AICPA Trust Services Criteria")
-        iso = await _get_or_create_framework(db, "iso27001", "ISO 27001", "Information security management")
+        # Seeds the full global framework/requirement catalog (SOC 2, ISO
+        # 27001, GDPR, PCI DSS v4, HIPAA, NIST CSF 2.0) — the demo org
+        # only adopts SOC 2 + ISO 27001 below, but every other framework
+        # is now visible in the global catalog for any org to adopt.
+        frameworks = await ensure_catalog_seeded(db)
+        soc2 = frameworks["soc2"]
+        iso = frameworks["iso27001"]
 
         db.add(OrganizationFramework(organization_id=org.id, framework_id=soc2.id))
         db.add(OrganizationFramework(organization_id=org.id, framework_id=iso.id))
 
-        cc6 = await _get_or_create_requirement(db, soc2, "CC6", "Logical and Physical Access Controls")
-        cc7 = await _get_or_create_requirement(db, soc2, "CC7", "System Operations")
-        a5 = await _get_or_create_requirement(db, iso, "A.5", "Organizational controls")
-        a8 = await _get_or_create_requirement(db, iso, "A.8", "Technological controls")
+        cc6 = await _requirement(db, soc2.id, "CC6")
+        cc7 = await _requirement(db, soc2.id, "CC7")
+        a5 = await _requirement(db, iso.id, "A.5")
+        a8 = await _requirement(db, iso.id, "A.8")
 
         now = datetime.now(timezone.utc)
 

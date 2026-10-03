@@ -8,16 +8,20 @@ A check never returns FAIL on an error it can't actually attribute to the
 control (auth failure, missing permission, network error, resource not
 found) — those come back as NEEDS_REVIEW so a connectivity problem can
 never silently read as "your security control is broken."
+
+credentials shape: {"token": "<personal access token>"}
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Awaitable, Callable
 
 import httpx
 
 from app.core.config import settings
 from app.models.control import ControlStatus
+from app.services.connectors.base import CheckResult, ConnectorAuthError
+
+GithubAuthError = ConnectorAuthError  # kept as a name consumers/tests already use
 
 _HEADERS_BASE = {
     "Accept": "application/vnd.github+json",
@@ -25,25 +29,14 @@ _HEADERS_BASE = {
 }
 
 
-@dataclass
-class CheckResult:
-    status: ControlStatus
-    summary: str
-    raw: dict
-
-
-class GithubAuthError(ValueError):
-    pass
-
-
-async def validate_token(token: str) -> str:
+async def validate(credentials: dict) -> str:
     """Confirms a PAT actually authenticates before a Connection is ever
-    stored, and returns the authenticated login for display. Raises
-    GithubAuthError with a human-readable reason on failure."""
+    stored, and returns the authenticated login for display."""
+    token = credentials.get("token", "")
     async with httpx.AsyncClient(base_url=settings.github_api_base_url, timeout=10.0) as client:
         resp = await client.get("/user", headers={**_HEADERS_BASE, "Authorization": f"Bearer {token}"})
     if resp.status_code == 401:
-        raise GithubAuthError("GitHub rejected this token — check it hasn't expired or been revoked")
+        raise ConnectorAuthError("GitHub rejected this token — check it hasn't expired or been revoked")
     resp.raise_for_status()
     return resp.json()["login"]
 
@@ -52,11 +45,12 @@ async def _get(client: httpx.AsyncClient, path: str, token: str) -> httpx.Respon
     return await client.get(path, headers={**_HEADERS_BASE, "Authorization": f"Bearer {token}"})
 
 
-async def check_branch_protection(token: str, target: str) -> CheckResult:
+async def check_branch_protection(credentials: dict, target: str) -> CheckResult:
     """target: 'owner/repo'. PASS only if the default branch requires
     pull request reviews before merging — a branch can be "protected" in
     GitHub's terms while still allowing direct pushes to main, so
     protection alone isn't the bar."""
+    token = credentials.get("token", "")
     async with httpx.AsyncClient(base_url=settings.github_api_base_url, timeout=10.0) as client:
         repo_resp = await _get(client, f"/repos/{target}", token)
         if repo_resp.status_code == 404:
@@ -98,8 +92,9 @@ async def check_branch_protection(token: str, target: str) -> CheckResult:
     )
 
 
-async def check_org_2fa_enforced(token: str, target: str) -> CheckResult:
+async def check_org_2fa_enforced(credentials: dict, target: str) -> CheckResult:
     """target: a GitHub org login (no repo)."""
+    token = credentials.get("token", "")
     async with httpx.AsyncClient(base_url=settings.github_api_base_url, timeout=10.0) as client:
         resp = await _get(client, f"/orgs/{target}", token)
     if resp.status_code == 404:
@@ -126,9 +121,10 @@ async def check_org_2fa_enforced(token: str, target: str) -> CheckResult:
     )
 
 
-async def check_dependabot_alerts(token: str, target: str) -> CheckResult:
+async def check_dependabot_alerts(credentials: dict, target: str) -> CheckResult:
     """target: 'owner/repo'. This endpoint has no response body — GitHub
     signals the setting purely via status code."""
+    token = credentials.get("token", "")
     async with httpx.AsyncClient(base_url=settings.github_api_base_url, timeout=10.0) as client:
         resp = await _get(client, f"/repos/{target}/vulnerability-alerts", token)
     if resp.status_code == 204:
@@ -147,10 +143,11 @@ async def check_dependabot_alerts(token: str, target: str) -> CheckResult:
     )
 
 
-async def check_secret_scanning(token: str, target: str) -> CheckResult:
+async def check_secret_scanning(credentials: dict, target: str) -> CheckResult:
     """target: 'owner/repo'. Secret scanning status is only visible to a
     token with admin access on the repo, and only meaningful on repos
     where GitHub Advanced Security applies."""
+    token = credentials.get("token", "")
     async with httpx.AsyncClient(base_url=settings.github_api_base_url, timeout=10.0) as client:
         resp = await _get(client, f"/repos/{target}", token)
     if resp.status_code == 404:
@@ -175,7 +172,7 @@ async def check_secret_scanning(token: str, target: str) -> CheckResult:
     return CheckResult(ControlStatus.FAIL, f"Secret scanning is NOT enabled on {target}", analysis)
 
 
-CheckFn = Callable[[str, str], Awaitable[CheckResult]]
+CheckFn = Callable[[dict, str], Awaitable[CheckResult]]
 
 CHECKS: dict[str, CheckFn] = {
     "github.branch_protection": check_branch_protection,
@@ -185,8 +182,8 @@ CHECKS: dict[str, CheckFn] = {
 }
 
 CHECK_LABELS: dict[str, str] = {
-    "github.branch_protection": "Branch protection requires PR reviews",
-    "github.org_2fa_enforced": "Org-wide 2FA enforcement",
-    "github.dependabot_alerts": "Dependabot alerts enabled",
-    "github.secret_scanning": "Secret scanning enabled",
+    "github.branch_protection": "Branch protection requires PR reviews (target: owner/repo)",
+    "github.org_2fa_enforced": "Org-wide 2FA enforcement (target: org login)",
+    "github.dependabot_alerts": "Dependabot alerts enabled (target: owner/repo)",
+    "github.secret_scanning": "Secret scanning enabled (target: owner/repo)",
 }

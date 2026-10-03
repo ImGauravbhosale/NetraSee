@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime, timezone
 
@@ -16,7 +17,8 @@ from app.models.membership import Role
 from app.schemas.connection import CheckResultOut, ConnectionCreateRequest, ConnectionOut, SyncResultOut
 from app.services.automation import run_control_check
 from app.services.audit import write_audit_event
-from app.services.connectors import github
+from app.services.connectors import CONNECTORS, all_check_labels
+from app.services.connectors.base import ConnectorAuthError
 
 router = APIRouter(prefix="/api/v1/orgs/{org_id}/connections", tags=["connections"])
 
@@ -37,7 +39,7 @@ async def list_available_checks(
     # matches path patterns in declaration order, so this static segment
     # must come first or "available-checks" would be parsed as a
     # connection_id and 422 instead of matching here.
-    return [{"key": key, "label": label} for key, label in github.CHECK_LABELS.items()]
+    return [{"key": key, "label": label} for key, label in all_check_labels().items()]
 
 
 @router.post("", response_model=ConnectionOut, status_code=status.HTTP_201_CREATED)
@@ -48,20 +50,23 @@ async def create_connection(
     ctx: OrgContext = Depends(require_org_role(Role.ADMIN)),
     db: AsyncSession = Depends(get_db),
 ):
+    connector = CONNECTORS[payload.provider.value]
+
     # Never store a credential we haven't confirmed actually works — a
-    # dead token would otherwise sit silently until the first sync fails.
+    # dead credential would otherwise sit silently until the first sync
+    # fails.
     try:
-        account_login = await github.validate_token(payload.token)
-    except github.GithubAuthError as exc:
+        account_login = await connector.validate(payload.credentials)
+    except ConnectorAuthError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
     except Exception:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Could not reach GitHub to validate this token")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Could not reach {payload.provider.value} to validate these credentials")
 
     connection = Connection(
         organization_id=org_id,
         provider=payload.provider,
         account_login=account_login,
-        encrypted_token=encrypt_secret(payload.token),
+        encrypted_token=encrypt_secret(json.dumps(payload.credentials)),
         created_by_user_id=ctx.user.id,
     )
     db.add(connection)
