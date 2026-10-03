@@ -1,5 +1,6 @@
 # NetraSee
 
+[![Release](https://img.shields.io/github/v/release/ImGauravbhosale/NetraSee?sort=semver&display_name=release)](https://github.com/ImGauravbhosale/NetraSee/releases/latest)
 [![Tests](https://github.com/ImGauravbhosale/NetraSee/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/ImGauravbhosale/NetraSee/actions/workflows/test.yml)
 [![License](https://img.shields.io/github/license/ImGauravbhosale/NetraSee)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](backend/pyproject.toml)
@@ -77,13 +78,17 @@ It's also packaged as a GitHub Action ([`action.yml`](action.yml)) you can drop
 into any repo's workflow:
 
 ```yaml
-- uses: ImGauravbhosale/NetraSee@main
+- uses: ImGauravbhosale/NetraSee@v0.1.0
   with:
     provider: github
     check: github.branch_protection
     target: ${{ github.repository }}
     github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
+
+Pinned to a release tag, not `@main` — a floating branch reference means your
+pipeline silently runs whatever's newest the moment it executes. For maximum
+supply-chain safety, pin to the release's full commit SHA instead of the tag.
 
 NetraSee runs this against its own repo on every push
 ([`.github/workflows/compliance.yml`](.github/workflows/compliance.yml)) — the
