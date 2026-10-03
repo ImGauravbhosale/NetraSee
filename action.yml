@@ -1,0 +1,108 @@
+name: "NetraSee Compliance Check"
+description: >-
+  Runs one NetraSee automated compliance check against a live GitHub or AWS
+  account and fails the job if it doesn't pass — the same check engine the
+  NetraSee web app uses, with no database or server required.
+author: "Gaurav Bhosale"
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  provider:
+    description: "github or aws"
+    required: true
+  check:
+    description: "Check key — run `netrasee-check --list-checks` to see all of them, e.g. github.branch_protection, aws.root_mfa_enabled"
+    required: true
+  target:
+    description: "owner/repo, org login, bucket name, or region, depending on the check"
+    required: true
+  github-token:
+    description: "GitHub PAT, required when provider is github"
+    required: false
+  aws-access-key-id:
+    description: "AWS access key ID, required when provider is aws"
+    required: false
+  aws-secret-access-key:
+    description: "AWS secret access key, required when provider is aws"
+    required: false
+  aws-region:
+    description: "AWS region (defaults to us-east-1)"
+    required: false
+    default: "us-east-1"
+  fail-on-review:
+    description: "Also fail the job on NEEDS_REVIEW, not just FAIL"
+    required: false
+    default: "false"
+
+outputs:
+  status:
+    description: "PASS, FAIL, or NEEDS_REVIEW"
+    value: ${{ steps.run-check.outputs.status }}
+  summary:
+    description: "One-line human summary of the result"
+    value: ${{ steps.run-check.outputs.summary }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        python-version: "3.12"
+
+    - name: Install NetraSee check engine
+      shell: bash
+      working-directory: ${{ github.action_path }}/backend
+      run: uv sync --no-dev
+
+    - name: Run check
+      id: run-check
+      shell: bash
+      working-directory: ${{ github.action_path }}/backend
+      env:
+        NETRASEE_GITHUB_TOKEN: ${{ inputs.github-token }}
+        NETRASEE_AWS_ACCESS_KEY_ID: ${{ inputs.aws-access-key-id }}
+        NETRASEE_AWS_SECRET_ACCESS_KEY: ${{ inputs.aws-secret-access-key }}
+        NETRASEE_AWS_REGION: ${{ inputs.aws-region }}
+      run: |
+        set +e
+        uv run netrasee-check \
+          --provider "${{ inputs.provider }}" \
+          --check "${{ inputs.check }}" \
+          --target "${{ inputs.target }}" \
+          --json \
+          $([ "${{ inputs.fail-on-review }}" = "true" ] && printf -- "--fail-on-review") \
+          > "$RUNNER_TEMP/netrasee-result.json"
+        CODE=$?
+        set -e
+
+        # Read from the file rather than piping the captured output through
+        # echo — some shells' echo interprets backslash escapes, which would
+        # corrupt the \n already correctly escaped inside the JSON string.
+        STATUS=$(python3 -c "import json; print(json.load(open('$RUNNER_TEMP/netrasee-result.json'))['status'])")
+        SUMMARY=$(python3 -c "import json; print(json.load(open('$RUNNER_TEMP/netrasee-result.json'))['summary'])")
+
+        echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+        # Summary can legitimately contain embedded newlines (e.g. an HTTP
+        # error's multi-line message) — GITHUB_OUTPUT's plain key=value
+        # format breaks on those, so this uses the documented multiline
+        # delimiter form with a random boundary to avoid any collision with
+        # content that happens to contain the word EOF.
+        DELIM="ghadelim_${RANDOM}_$$"
+        {
+          echo "summary<<$DELIM"
+          echo "$SUMMARY"
+          echo "$DELIM"
+        } >> "$GITHUB_OUTPUT"
+
+        if [ "$STATUS" = "FAIL" ]; then
+          echo "::error::NetraSee check ${{ inputs.check }} FAILED: $SUMMARY"
+        elif [ "$STATUS" = "NEEDS_REVIEW" ]; then
+          echo "::warning::NetraSee check ${{ inputs.check }} needs review: $SUMMARY"
+        else
+          echo "::notice::NetraSee check ${{ inputs.check }} passed: $SUMMARY"
+        fi
+
+        exit $CODE

@@ -1,0 +1,44 @@
+name: Compliance self-check
+
+# Dogfoods this repo's own GitHub Action (action.yml) against this repo
+# itself — the clearest proof the automated-check engine actually works
+# is NetraSee checking its own security posture, not just a mocked test.
+#
+# NEEDS_REVIEW (not FAIL) is the expected, correct outcome if the default
+# GITHUB_TOKEN doesn't have enough privilege to read a given repo setting
+# — that's the connector's documented safety behavior, not a bug. This
+# workflow does not fail the build on NEEDS_REVIEW for that reason.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  administration: read
+
+jobs:
+  branch-protection:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          provider: github
+          check: github.branch_protection
+          target: ${{ github.repository }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  dependabot-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          provider: github
+          check: github.dependabot_alerts
+          target: ${{ github.repository }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}

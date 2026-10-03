@@ -48,6 +48,37 @@ Checks shipped in v1:
 Once a control is bound, its status can no longer be set manually — it's overwritten
 by the next sync, so a real failure can't be quietly clicked away to PASS.
 
+## Not just a web app — a CLI and a CI gate
+
+The same check engine that runs behind the web dashboard runs standalone, with no
+database and no server:
+
+```bash
+cd backend
+uv run netrasee-check --list-checks
+uv run netrasee-check --provider github --check github.branch_protection \
+  --target your-org/your-repo --token "$GITHUB_TOKEN" --json
+```
+
+Exits `0` on PASS, `1` on FAIL (and optionally on NEEDS_REVIEW with
+`--fail-on-review`) — built to gate a pipeline, not just print a report.
+
+That CLI is also packaged as a GitHub Action ([`action.yml`](action.yml)) you can
+drop into any repo's workflow:
+
+```yaml
+- uses: ImGauravbhosale/NetraSee@main
+  with:
+    provider: github
+    check: github.branch_protection
+    target: ${{ github.repository }}
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+NetraSee runs this against its own repo on every push
+([`.github/workflows/compliance.yml`](.github/workflows/compliance.yml)) — the
+clearest proof the engine works is it checking itself, not just a README claim.
+
 ## Framework catalog
 
 Six frameworks, seeded from each one's own published structure (sources in
@@ -80,10 +111,11 @@ control maps to both SOC 2 and ISO 27001).
 | Append-only audit log | ✅ |
 | Policies / Risks / Assets / Vendors / Audit Center / Reports | 🚧 Not built — see [Roadmap](#roadmap) |
 
-Nothing above is a mockup. It's backed by a real Postgres database, 66 passing
-tests (including 7 dedicated cross-tenant-isolation tests and connector tests
-against realistically-shaped mocked GitHub and AWS responses), and every number
-on every screenshot in this README came from actually running the app.
+Nothing above is a mockup. It's backed by a real Postgres database, 77 passing
+tests (including 7 dedicated cross-tenant-isolation tests, connector tests
+against realistically-shaped mocked GitHub and AWS responses, and CLI exit-code
+tests), and every number on every screenshot in this README came from actually
+running the app.
 
 ## Quick start
 
@@ -220,11 +252,12 @@ cd backend
 uv run pytest
 ```
 
-66 tests, run against a real Postgres database (not mocked) — auth, tenant
+77 tests, run against a real Postgres database (not mocked) — auth, tenant
 isolation, role/permission checks, CSRF, evidence status computation, SQL
-injection safety on filter parameters, the full framework catalog, and both
+injection safety on filter parameters, the full framework catalog, both
 connectors' PASS/FAIL/NEEDS_REVIEW logic against realistically-shaped mocked
-GitHub and AWS responses.
+GitHub and AWS responses, and the CLI's exit codes. Runs on every push via
+[`.github/workflows/test.yml`](.github/workflows/test.yml).
 
 ## License
 
