@@ -90,27 +90,66 @@ audit event so there's a record of who deleted what and when.
 | `EXPIRED` | Expiry date has passed |
 | `UNDER_REVIEW` | Manually flagged as under review — takes priority over the date-based statuses |
 
-## 6. Roles
+## 6. Integrations — automated controls
+
+**Integrations** is where you connect a real account so NetraSee can evaluate
+controls itself instead of waiting on a human to upload evidence.
+
+1. Click **Connect GitHub** and paste a personal access token with `repo` and
+   `read:org` scopes. NetraSee validates it against the real GitHub API before
+   saving anything — a dead or mistyped token is rejected immediately, not
+   discovered on the first sync. The token is encrypted at rest and never shown
+   again, including to you.
+2. Open a control's detail page and use the **Automation** panel to bind it to
+   one of the available checks (branch protection, org-wide 2FA, Dependabot
+   alerts, secret scanning) and a target (`owner/repo` for repo-level checks, or
+   just the org login for org-wide ones like 2FA).
+3. Back on **Integrations**, click **Sync now**. NetraSee calls GitHub live,
+   computes PASS/FAIL/NEEDS_REVIEW for every bound control, and shows you the
+   exact result for each.
+
+Once a control is bound to automation:
+
+- Its status can no longer be changed with the manual status dropdown — the
+  PATCH is rejected server-side, not just hidden in the UI, so a real failure
+  can't be quietly clicked away to PASS.
+- Every sync creates a real Evidence entry containing GitHub's exact API
+  response, visible from the control's detail page alongside its summary (e.g.
+  *"Branch 'main' on acme/widgets has no protection rules configured"*) —
+  not just a status, but what produced it.
+- This automated evidence expires after 24 hours, so a control can't keep
+  reading as compliant indefinitely off a single stale sync.
+
+Unbind a control from its **Automation** panel at any time to make it manual
+again. Disconnecting a GitHub connection entirely automatically unbinds every
+control that depended on it, rather than leaving them pointed at a dead
+credential.
+
+A check that can't attribute its result to the control itself — a missing
+permission, a repo the token can't see, a network error — comes back as
+**NEEDS_REVIEW**, never a false FAIL or false PASS.
+
+## 7. Roles
 
 NetraSee has three roles in v1:
 
 | Role | Can do |
 |---|---|
 | **Viewer** | Read everything — dashboard, frameworks, controls, evidence |
-| **Admin** | Everything a Viewer can, plus: change control status, upload/delete evidence, add members (up to their own role), view the audit log |
+| **Admin** | Everything a Viewer can, plus: change control status, upload/delete evidence, connect integrations and bind automation, add members (up to their own role), view the audit log |
 | **Owner** | Everything an Admin can, plus: grant the Owner role to others |
 
 An Admin can never grant someone Owner — only an existing Owner can do that. This
 is enforced server-side, not just hidden in the UI.
 
-## 7. Activity Log
+## 8. Activity Log
 
-Every status change, evidence upload/delete, and member addition writes an
-append-only entry here — action, actor, resource, and (for status changes) the
-before/after values. Only Owners and Admins can view it. Nothing here can be
-edited or deleted after the fact.
+Every status change, evidence upload/delete, member addition, connection, and
+automated check writes an append-only entry here — action, actor, resource, and
+(for status changes) the before/after values. Only Owners and Admins can view it.
+Nothing here can be edited or deleted after the fact.
 
-## 8. Settings
+## 9. Settings
 
 Shows your organization name and its member list. Owners and Admins can add new
 members here directly — since v1 has no invite-email flow yet, you set an initial
@@ -118,8 +157,8 @@ password for them when adding them and share it out of band.
 
 ## What's not built yet
 
-The nav bar lists several modules — Policies, Risks, Assets, Vendors, Integrations,
-Audit Center, Reports — that are visibly present but marked "soon." Clicking them
+The nav bar lists several modules — Policies, Risks, Assets, Vendors, Audit
+Center, Reports — that are visibly present but marked "soon." Clicking them
 shows an honest "not built yet" page rather than fake data. See the
 [Roadmap](../README.md#roadmap) in the README for what's planned.
 
@@ -131,6 +170,15 @@ in it, so a non-member can't even confirm the org is real.
 
 **My upload was rejected** — check the file extension is in the allowed list above,
 and the file is under 25MB.
+
+**My GitHub connection won't save** — the token is rejected if GitHub itself
+rejects it (expired, revoked, or wrong scopes). Confirm it has `repo` and
+`read:org` scopes and hasn't expired.
+
+**A bound control keeps coming back NEEDS_REVIEW** — this means the check ran
+but couldn't attribute a real pass/fail to your token's access: usually the
+token can't see the repo/org, or lacks admin rights needed for that specific
+check (e.g. branch protection and secret scanning both need repo admin access).
 
 **I can't see the Activity Log** — it's restricted to Admin and Owner roles;
 Viewers don't have access.

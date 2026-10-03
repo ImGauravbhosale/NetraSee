@@ -24,6 +24,18 @@ Click through and NetraSee tells you *why* something is failing, not just that i
 That drill-down (Dashboard → Framework → Control → "why" → evidence → fix) is the
 one flow this v1 was built to get right end to end.
 
+## Automated controls — not just a dashboard
+
+A control doesn't have to be manually reviewed. Connect a real GitHub account and
+bind a control to a live check — NetraSee calls the GitHub API itself, computes
+PASS/FAIL/NEEDS_REVIEW, and attaches the exact API response as evidence. No human
+types in a status; no automated PASS exists without a citable response behind it.
+
+Checks shipped in v1: branch protection requires PR review, org-wide 2FA
+enforcement, Dependabot alerts enabled, secret scanning enabled. Once a control is
+bound, its status can no longer be set manually — it's overwritten by the next sync,
+so a real failure can't be quietly clicked away to PASS.
+
 ## What's actually built (v1)
 
 | Area | Status |
@@ -33,12 +45,14 @@ one flow this v1 was built to get right end to end.
 | Frameworks + requirements, progress computed live | ✅ (SOC 2, ISO 27001 seeded) |
 | Controls (many-to-many to requirements, real reuse) | ✅ |
 | Evidence (upload, expiry-aware status, control links) | ✅ |
+| Automated checks against a live GitHub account | ✅ |
 | Append-only audit log | ✅ |
-| Policies / Risks / Assets / Vendors / Integrations / Audit Center / Reports | 🚧 Not built — see [Roadmap](#roadmap) |
+| Policies / Risks / Assets / Vendors / Audit Center / Reports | 🚧 Not built — see [Roadmap](#roadmap) |
 
-Nothing above is a mockup. It's backed by a real Postgres database, 33 passing
-integration tests (including 6 dedicated cross-tenant-isolation tests), and every
-number on every screenshot in this README came from actually running the app.
+Nothing above is a mockup. It's backed by a real Postgres database, 52 passing
+tests (including 7 dedicated cross-tenant-isolation tests and connector tests
+against realistically-shaped mocked GitHub responses), and every number on every
+screenshot in this README came from actually running the app.
 
 ## Quick start
 
@@ -73,6 +87,7 @@ Then open **http://localhost:3000/login**.
 # Backend
 cd backend
 uv sync
+export NETRASEE_EVIDENCE_STORAGE_DIR=/tmp/netrasee-evidence  # default (/data/evidence) assumes the Docker volume
 uv run alembic upgrade head
 uv run python scripts/seed_demo.py
 uv run uvicorn app.main:app --port 8000
@@ -115,7 +130,8 @@ NetraSee/
 │       ├── core/       config, db session, security (argon2, CSRF, session tokens)
 │       ├── models/     SQLAlchemy ORM
 │       ├── schemas/    Pydantic request/response
-│       └── services/   audit log, evidence status, login rate limiting
+│       └── services/   audit log, evidence status, login rate limiting,
+│                        automated checks, GitHub connector
 └── frontend/           Next.js 16 (App Router) + TypeScript + Tailwind
     ├── app/            one route per page
     ├── components/     NavShell, StatusBadge, ProgressBar
@@ -142,16 +158,18 @@ Pydantic v2 on the backend; Next.js 16, TypeScript, Tailwind v4 on the frontend.
   traversal.
 - **Audit log**: every mutating action writes an append-only `audit_events` row —
   actor, before/after state, timestamp.
+- **Connection credentials**: a connected GitHub token is validated against the
+  real API before it's ever stored, encrypted at rest with Fernet (AES-128-CBC +
+  HMAC), and never returned by any API response after creation — not even to the
+  org that owns it.
 
-Deferred and documented, not silently skipped: SSO/OAuth, MFA, secrets
-encryption-at-rest (no integrations exist yet to need it).
+Deferred and documented, not silently skipped: SSO/OAuth, MFA.
 
 ## Roadmap
 
 Explicitly out of scope for v1, listed here rather than silently dropped:
 
-- Connectors (GitHub / AWS / Google Workspace / Jira) for automated evidence
-  collection
+- More connectors (AWS / Google Workspace / Jira) — GitHub is live, see above
 - Compliance-as-code (YAML-defined controls)
 - Policies, Risk register, Asset inventory, Vendor management
 - Audit Center (auditor-facing workspace)
@@ -166,9 +184,10 @@ cd backend
 uv run pytest
 ```
 
-33 tests, run against a real Postgres database (not mocked) — auth, tenant
-isolation, role/permission checks, CSRF, evidence status computation, and SQL
-injection safety on filter parameters.
+52 tests, run against a real Postgres database (not mocked) — auth, tenant
+isolation, role/permission checks, CSRF, evidence status computation, SQL
+injection safety on filter parameters, and the GitHub connector's PASS/FAIL/
+NEEDS_REVIEW logic against realistically-shaped mocked API responses.
 
 ## License
 

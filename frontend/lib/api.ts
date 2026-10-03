@@ -104,6 +104,9 @@ export interface ControlListItem {
   automation_status: "MANUAL" | "AUTOMATED" | "HYBRID";
   owner_user_id: string | null;
   next_review_at: string | null;
+  automation_connection_id: string | null;
+  automation_check_key: string | null;
+  automation_target: string | null;
 }
 
 export interface RequirementMapping {
@@ -117,6 +120,7 @@ export interface RequirementMapping {
 export interface ControlEvidenceRef {
   id: string;
   name: string;
+  description: string;
   status: string;
 }
 
@@ -162,6 +166,32 @@ export interface MemberOut {
   email: string;
   name: string;
   role: "OWNER" | "ADMIN" | "VIEWER";
+}
+
+export interface ConnectionOut {
+  id: string;
+  provider: "GITHUB";
+  account_login: string;
+  last_synced_at: string | null;
+  created_at: string;
+}
+
+export interface AvailableCheck {
+  key: string;
+  label: string;
+}
+
+export interface CheckResultOut {
+  control_id: string;
+  control_key: string;
+  check_key: string;
+  status: string;
+  summary: string;
+}
+
+export interface SyncResultOut {
+  synced_at: string;
+  results: CheckResultOut[];
 }
 
 export interface AuditEventOut {

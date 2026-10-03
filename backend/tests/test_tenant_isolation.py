@@ -80,6 +80,23 @@ async def test_user_b_cannot_view_user_a_audit_log(app):
         assert resp.status_code == 404
 
 
+async def test_user_b_cannot_list_or_sync_user_a_connections(app):
+    async with _client(app) as client_a:
+        org_a = (await register(client_a, email="a7-owner@example.com"))["organization_id"]
+
+    fake_connection_id = str(uuid.uuid4())
+
+    async with _client(app) as client_b:
+        await register(client_b, email="b7-owner@example.com")
+        list_resp = await client_b.get(f"/api/v1/orgs/{org_a}/connections")
+        assert list_resp.status_code == 404
+
+        sync_resp = await client_b.post(
+            f"/api/v1/orgs/{org_a}/connections/{fake_connection_id}/sync", headers=csrf_headers(client_b)
+        )
+        assert sync_resp.status_code == 404
+
+
 async def test_user_b_cannot_add_themselves_as_member_of_org_a(app):
     async with _client(app) as client_a:
         org_a = (await register(client_a, email="a6-owner@example.com"))["organization_id"]

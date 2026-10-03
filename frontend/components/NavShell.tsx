@@ -15,7 +15,7 @@ const NAV_ITEMS = [
   { href: "/risks", label: "Risks", built: false },
   { href: "/assets", label: "Assets", built: false },
   { href: "/vendors", label: "Vendors", built: false },
-  { href: "/integrations", label: "Integrations", built: false },
+  { href: "/integrations", label: "Integrations", built: true },
   { href: "/audits", label: "Audit Center", built: false },
   { href: "/reports", label: "Reports", built: false },
   { href: "/settings", label: "Settings", built: true },
@@ -76,7 +76,7 @@ export function ComingSoon({ title }: { title: string }) {
       <div className="mb-3 text-lg font-semibold text-neutral-800">{title}</div>
       <p className="max-w-md text-sm text-neutral-500">
         Not built yet in this v1 — see the README roadmap. Dashboard, Frameworks, Controls, Evidence, Activity Log,
-        and Settings are real and backed by the live API.
+        Settings, and Integrations are real and backed by the live API.
       </p>
     </div>
   );

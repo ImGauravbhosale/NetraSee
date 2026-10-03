@@ -217,6 +217,24 @@
 
 <section>
   <div class="wrap">
+    <h2>Automated controls — not just a dashboard</h2>
+    <h3>A control doesn't have to wait on a human</h3>
+    <p>
+      Connect a real GitHub account and bind a control to a live check.
+      NetraSee calls the GitHub API itself, computes PASS / FAIL / NEEDS_REVIEW,
+      and attaches the exact API response as evidence — no finding without a
+      citable response behind it. Once bound, a control's status can't be
+      manually overridden; the next sync overwrites it, so a real failure can't
+      be quietly clicked away to PASS.
+    </p>
+    <div class="flow">
+      Connect GitHub → bind CTRL-002 to <strong>branch_protection</strong> on <strong>acme/widgets</strong> → sync → GitHub API: no protection rule found → status: <strong>FAIL</strong>, evidence: the raw response
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
     <h2>Built in v1</h2>
     <table>
       <thead><tr><th>Area</th><th>Status</th></tr></thead>
@@ -226,8 +244,9 @@
         <tr><td>Frameworks + requirements, live progress</td><td class="ok">Built — SOC 2, ISO 27001</td></tr>
         <tr><td>Controls, reusable across frameworks</td><td class="ok">Built</td></tr>
         <tr><td>Evidence — upload, expiry-aware status</td><td class="ok">Built</td></tr>
+        <tr><td>Automated checks against a live GitHub account</td><td class="ok">Built</td></tr>
         <tr><td>Append-only audit log</td><td class="ok">Built</td></tr>
-        <tr><td>Policies / Risks / Assets / Vendors / Integrations / Audit Center / Reports</td><td class="soon">Roadmap</td></tr>
+        <tr><td>Policies / Risks / Assets / Vendors / Audit Center / Reports</td><td class="soon">Roadmap</td></tr>
       </tbody>
     </table>
   </div>
@@ -270,6 +289,14 @@ docker compose exec backend uv run python scripts/seed_demo.py</pre>
         <h3>Evidence upload safety</h3>
         <p>Extension allow-list, size cap, SHA-256 checksum, and a server-generated filename — never the client-supplied one.</p>
       </div>
+      <div>
+        <h3>Connection credentials encrypted at rest</h3>
+        <p>A connected GitHub token is validated against the real API before it's ever stored, encrypted with Fernet (AES-128-CBC + HMAC), and never returned by any API response — not even to the org that owns it.</p>
+      </div>
+      <div>
+        <h3>Automated status can't be faked</h3>
+        <p>Once a control is bound to a live check, manually PATCHing its status is rejected server-side — a real failure can't be quietly clicked away to PASS.</p>
+      </div>
     </div>
   </div>
 </section>
@@ -278,7 +305,7 @@ docker compose exec backend uv run python scripts/seed_demo.py</pre>
   <div class="wrap">
     <h2>Roadmap — deferred, not dropped</h2>
     <ul class="roadmap">
-      <li>Connectors (GitHub / AWS / Google Workspace / Jira)</li>
+      <li>More connectors (AWS / Google Workspace / Jira) — GitHub is live</li>
       <li>Compliance-as-code (YAML-defined controls)</li>
       <li>Policies, Risk register, Asset inventory</li>
       <li>Vendor management</li>

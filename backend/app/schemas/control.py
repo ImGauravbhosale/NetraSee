@@ -19,6 +19,7 @@ class RequirementMappingOut(BaseModel):
 class ControlEvidenceOut(BaseModel):
     id: uuid.UUID
     name: str
+    description: str
     status: str
 
 
@@ -31,6 +32,9 @@ class ControlListItemOut(BaseModel):
     automation_status: AutomationStatus
     owner_user_id: uuid.UUID | None
     next_review_at: datetime | None
+    automation_connection_id: uuid.UUID | None
+    automation_check_key: str | None
+    automation_target: str | None
 
     model_config = ConfigDict(from_attributes=True)
 

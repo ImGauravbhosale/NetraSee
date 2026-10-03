@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import audit_log, auth, controls, dashboard, evidence, frameworks, members
+from app.api import audit_log, auth, connections, controls, dashboard, evidence, frameworks, members
 from app.api.deps import require_csrf
 
 app = FastAPI(title="NetraSee API", version="0.1.0")
@@ -26,6 +26,7 @@ app.include_router(evidence.router, dependencies=[Depends(require_csrf)])
 app.include_router(dashboard.router)
 app.include_router(audit_log.router)
 app.include_router(members.router, dependencies=[Depends(require_csrf)])
+app.include_router(connections.router, dependencies=[Depends(require_csrf)])
 
 
 @app.get("/health")

@@ -2,6 +2,7 @@
 autogenerate and for create_all() in tests."""
 from app.models.audit_event import AuditEvent
 from app.models.base import Base
+from app.models.connection import Connection, ConnectionProvider
 from app.models.control import Control, ControlRequirementLink
 from app.models.evidence import Evidence, EvidenceControlLink
 from app.models.framework import Framework, OrganizationFramework, Requirement
@@ -24,4 +25,6 @@ __all__ = [
     "Evidence",
     "EvidenceControlLink",
     "AuditEvent",
+    "Connection",
+    "ConnectionProvider",
 ]

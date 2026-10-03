@@ -56,6 +56,17 @@ class Control(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     last_tested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     next_review_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Automation binding — when all three are set, this control's status
+    # is no longer set by a human via PATCH; it's overwritten by the next
+    # connection sync. check_key names a function in
+    # app.services.connectors (e.g. "github.branch_protection"); target is
+    # provider-specific (e.g. "owner/repo" or an org login).
+    automation_connection_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("connections.id", ondelete="SET NULL"), nullable=True
+    )
+    automation_check_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    automation_target: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
 
 class ControlRequirementLink(Base, UUIDPrimaryKeyMixin):
     """The reusability mechanism: one Control can satisfy many

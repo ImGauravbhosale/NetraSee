@@ -8,11 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import OrgContext, require_org_role
 from app.core.db import get_db
-from app.models.control import Control, ControlRequirementLink, ControlStatus
+from app.models.connection import Connection
+from app.models.control import AutomationStatus, Control, ControlRequirementLink, ControlStatus
 from app.models.evidence import Evidence, EvidenceControlLink
 from app.models.framework import Framework, Requirement
 from app.models.membership import Role
 from app.models.framework import Requirement
+from app.schemas.connection import AutomationBindRequest
 from app.schemas.control import (
     ControlCreateRequest,
     ControlDetailOut,
@@ -22,6 +24,7 @@ from app.schemas.control import (
     RequirementMappingOut,
 )
 from app.services.audit import write_audit_event
+from app.services.connectors import github
 from app.services.evidence_status import effective_status
 
 router = APIRouter(prefix="/api/v1/orgs/{org_id}/controls", tags=["controls"])
@@ -104,7 +107,9 @@ async def _load_detail(control: Control, db: AsyncSession) -> ControlDetailOut:
         .where(EvidenceControlLink.control_id == control.id)
     )
     evidence = [
-        ControlEvidenceOut(id=e.id, name=e.name, status=effective_status(e.status, e.expires_at).value)
+        ControlEvidenceOut(
+            id=e.id, name=e.name, description=e.description, status=effective_status(e.status, e.expires_at).value
+        )
         for e in evidence_result.scalars().all()
     ]
 
@@ -152,6 +157,12 @@ async def update_control(
 
     changed = False
     if payload.status is not None and payload.status != control.status:
+        if control.automation_check_key is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "This control's status is set by its connected automated check, not manually — "
+                "unbind automation first if you need to override it",
+            )
         control.status = payload.status
         changed = True
     if payload.owner_user_id is not None and payload.owner_user_id != control.owner_user_id:
@@ -177,6 +188,81 @@ async def update_control(
             after_state=after_state,
             request=request,
         )
+
+    await db.commit()
+    await db.refresh(control)
+    return await _load_detail(control, db)
+
+
+@router.post("/{control_id}/automation", response_model=ControlDetailOut)
+async def bind_automation(
+    org_id: uuid.UUID,
+    control_id: uuid.UUID,
+    payload: AutomationBindRequest,
+    request: Request,
+    ctx: OrgContext = Depends(require_org_role(Role.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+):
+    control = await db.get(Control, control_id)
+    if control is None or control.organization_id != org_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Control not found")
+
+    connection = await db.get(Connection, payload.connection_id)
+    if connection is None or connection.organization_id != org_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Connection not found")
+
+    if payload.check_key not in github.CHECKS:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unknown check: {payload.check_key}")
+
+    control.automation_connection_id = connection.id
+    control.automation_check_key = payload.check_key
+    control.automation_target = payload.target
+    control.automation_status = AutomationStatus.AUTOMATED
+
+    await write_audit_event(
+        db,
+        organization_id=org_id,
+        actor_user_id=ctx.user.id,
+        action="control.automation_bound",
+        resource_type="control",
+        resource_id=str(control.id),
+        after_state={"check_key": payload.check_key, "target": payload.target},
+        request=request,
+    )
+
+    await db.commit()
+    await db.refresh(control)
+    return await _load_detail(control, db)
+
+
+@router.delete("/{control_id}/automation", response_model=ControlDetailOut)
+async def unbind_automation(
+    org_id: uuid.UUID,
+    control_id: uuid.UUID,
+    request: Request,
+    ctx: OrgContext = Depends(require_org_role(Role.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+):
+    control = await db.get(Control, control_id)
+    if control is None or control.organization_id != org_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Control not found")
+
+    before_state = {"check_key": control.automation_check_key, "target": control.automation_target}
+    control.automation_connection_id = None
+    control.automation_check_key = None
+    control.automation_target = None
+    control.automation_status = AutomationStatus.MANUAL
+
+    await write_audit_event(
+        db,
+        organization_id=org_id,
+        actor_user_id=ctx.user.id,
+        action="control.automation_unbound",
+        resource_type="control",
+        resource_id=str(control.id),
+        before_state=before_state,
+        request=request,
+    )
 
     await db.commit()
     await db.refresh(control)
